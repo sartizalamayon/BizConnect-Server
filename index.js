@@ -443,13 +443,92 @@ async function run() {
       .collection("coursesuggestions");
 
     // AI Part - CourseSuggestions
-    app.get("/ai/:prompt", async (req, res) => {
-      let prompt = req.params.prompt;
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      res.send(response.candidates[0].content.parts[0].text);
-    });
+    app.post("/ai/:studentEmail", async (req, res) => {
+      const email = req.params.studentEmail;
+  
+      try {
+          const studentData = await StudentsCollection.findOne({ email });
+  
+          if (!studentData) {
+              return res.status(404).json({ message: "Student not found" });
+          }
+  
+          const {
+              skills,
+              introduction,
+              major,
+              graduation_year,
+              interested_fields,
+              experience,
+              highest_education_degree
+          } = studentData;
+  
+          const suggestedSkills_prompt = `Based on the student's skills: ${skills.join(', ')}, major: ${major}, graduation year: ${graduation_year}, and interested fields: ${interested_fields.join(', ')}, suggest new skills the student should learn. Provide the suggestions as an array.`;
+          const skillsRoadmap_prompt = `Based on the student's skills: ${skills.join(', ')}, major: ${major}, graduation year: ${graduation_year}, and interested fields: ${interested_fields.join(', ')}, provide a roadmap for acquiring these skills. Provide the roadmap as a text.`;
+          const suggestedCourses_prompt = `Based on the student's skills: ${skills.join(', ')}, major: ${major}, graduation year: ${graduation_year}, and interested fields: ${interested_fields.join(', ')}, suggest courses the student should take. Provide the suggestions as an array.`;
+          const careerPath_prompt = `Based on the student's skills: ${skills.join(', ')}, major: ${major}, graduation year: ${graduation_year}, and interested fields: ${interested_fields.join(', ')}, suggest a suitable career path. Provide the suggestion as a text.`;
+          const careerRoadmap_prompt = `Based on the student's skills: ${skills.join(', ')}, major: ${major}, graduation year: ${graduation_year}, and interested fields: ${interested_fields.join(', ')}, provide a roadmap for the student's career. Provide the roadmap as a text.`;
+  
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  
+          const suggestedSkillsResult = await model.generateContent(suggestedSkills_prompt);
+          const suggestedSkillsResponse = await suggestedSkillsResult.response;
+          const suggestedSkills = suggestedSkillsResponse.candidates[0].content.parts[0].text;
+  
+          const skillsRoadmapResult = await model.generateContent(skillsRoadmap_prompt);
+          const skillsRoadmapResponse = await skillsRoadmapResult.response;
+          const skillsRoadmap = skillsRoadmapResponse.candidates[0].content.parts[0].text;
+  
+          const suggestedCoursesResult = await model.generateContent(suggestedCourses_prompt);
+          const suggestedCoursesResponse = await suggestedCoursesResult.response;
+          const suggestedCourses = suggestedCoursesResponse.candidates[0].content.parts[0].text;
+  
+          const careerPathResult = await model.generateContent(careerPath_prompt);
+          const careerPathResponse = await careerPathResult.response;
+          const careerPath = careerPathResponse.candidates[0].content.parts[0].text;
+  
+          const careerRoadmapResult = await model.generateContent(careerRoadmap_prompt);
+          const careerRoadmapResponse = await careerRoadmapResult.response;
+          const careerRoadmap = careerRoadmapResponse.candidates[0].content.parts[0].text;
+  
+          const data_to_push = {
+              email,
+              suggestedSkills,
+              skillsRoadmap,
+              suggestedCourses,
+              careerPath,
+              careerRoadmap,
+          };
+  
+          await CourseSuggestionsCollection.insertOne(data_to_push);
+  
+          res.status(201).json(data_to_push);
+  
+      } catch (error) {
+          console.error("Error generating AI content:", error);
+          res.status(500).json({ message: "Error generating AI content", error });
+      }
+  });
+// GET - Retrieve course suggestions by student email
+app.get('/coursesuggestions/:email', async (req, res) => {
+  const email = req.params.email;
+
+  try {
+      const courseSuggestions = await CourseSuggestionsCollection.findOne({ email });
+
+      if (!courseSuggestions) {
+          return res.status(404).json({ message: 'Course suggestions not found for this student' });
+      }
+
+      res.status(200).json(courseSuggestions);
+  } catch (error) {
+      console.error("Error retrieving course suggestions:", error);
+      res.status(500).json({ message: 'Error retrieving course suggestions', error });
+  }
+});
+
+
+
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error);
   }
