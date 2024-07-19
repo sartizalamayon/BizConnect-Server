@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
-const multer = require("multer");
-const path = require("path");
+// const multer = require("multer");
+// const path = require("path");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
@@ -12,12 +12,12 @@ const port = process.env.PORT || 3000;
 
 app.use(
   cors({
-    origin: ["http://localhost:5174", "http://localhost:5173"],
+    origin: ["http://localhost:5174", "http://localhost:5173",'http://localhost:5175'],
     credentials: true,
   })
 );
 app.use(express.json());
-app.use(express.static("uploads")); // Serve uploaded files from this directory
+// app.use(express.static("uploads")); // Serve uploaded files from this directory
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.b6ckjyi.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -30,25 +30,145 @@ const client = new MongoClient(uri, {
 });
 
 // Set up multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/");
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}_${file.originalname}`);
-  },
-});
-const upload = multer({ storage });
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, "uploads/");
+//   },
+//   filename: (req, file, cb) => {
+//     cb(null, `${Date.now()}_${file.originalname}`);
+//   },
+// });
+// const upload = multer({ storage });
 
 async function run() {
   try {
     await client.connect();
 
     //
+    // Users Collection
+    //
+    const UsersCollection = client.db("BizConnect").collection("users");
+    app.post("/users", async (req, res) => {
+      try {
+        const newUser = req.body;
+        const result = await UsersCollection.insertOne(newUser);
+        res.status(201).json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Error creating user", error });
+      }
+    }
+    );
+
+    app.patch("/users/:email", async (req, res) => {
+      console.log(req.params.email)
+      try {
+        const { email } = req.params;
+        const updates = req.body;
+        const result = await UsersCollection.updateOne(
+          { email },
+          { $set: updates }
+        );
+        if (result.matchedCount > 0) {
+          res.status(200).json({ message: "User updated successfully" });
+        } else {
+          res.status(404).json({ message: "User not found" });
+        }
+      } catch (error) {
+        res.status(500).json({ message: "Error updating user", error });
+      }
+    }
+    );
+
+
+    //new:::check
+    app.get("/users/role/:email", async(req, res)=>{
+      const { email } = req.params;
+      try {
+        const user = await UsersCollection.find({email}).toArray();
+        res.status(200).json(user.role);
+      } catch (error) {
+        res.status(500).json({ message: "Error retrieving role", error });
+      }
+    });
+
+    //new:::check
+    app.get("/data/:role/:email", async(req, res)=>{
+      const {role} = req.params
+      const {email} = req.params
+      try{
+        if(role === "entrepreneur"){
+          const userData = await EntrepreneursCollection.findOne({email}).toArray();
+          res.status(200).json(userData);
+        }
+        if(role === "investor"){
+          const userData = await InvestorsCollection.findOne({email}).toArray();
+          res.status(200).json(userData);
+        }
+        if(role === "student"){
+          const userData = await StudentsCollection.findOne({email}).toArray();
+          res.status(200).json(userData);
+        }
+
+      }catch (error) {
+        res.status(500).json({ message: "Error retrieving role", error });
+      }
+    })
+    //
+    // Entrepreneurs Collection
+    //
+    const EntrepreneursCollection = client.db("BizConnect").collection("entrepreneurs");
+    app.post("/entrepreneurs", async (req, res) => {
+      try {
+        const newEntrepreneur = req.body;
+        const result = await EntrepreneursCollection.insertOne(newEntrepreneur);
+        res.status(201).json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Error creating entrepreneur", error });
+      }
+    }
+    );
+
+
+    //
+    // Entrepreneurstartups Collection
+    //
+    const EntrepreneurStartupsCollection = client.db("BizConnect").collection("entrepreneurstartups");
+
+
+    //
+    // Investors Collection
+    //
+    const InvestorsCollection = client.db("BizConnect").collection("investors");
+    app.post("/investors", async (req, res) => {
+      try {
+        const newInvestor = req.body;
+        const result = await InvestorsCollection.insertOne(newInvestor);
+        res.status(201).json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Error creating investor", error });
+      }
+    }
+    );
+
+
+    //
     // Students Collection
     //
 
     const StudentsCollection = client.db("BizConnect").collection("students");
+
+    app.post("/students", async (req, res) => {
+      try {
+        const newStudent = req.body;
+        const result = await StudentsCollection.insertOne(newStudent);
+        res.status(201).json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Error creating student", error });
+      }
+    }
+  );
+
+
     // GET - Retrieve all students
     app.get("/students", async (req, res) => {
       try {
@@ -74,27 +194,12 @@ async function run() {
       }
     });
 
-    // POST - Create a new student
-    app.post("/students", upload.single("cv"), async (req, res) => {
-      try {
-        const newStudent = {
-          ...req.body,
-          cv: req.file.path, // Save the file path
-        };
-        const result = await StudentsCollection.insertOne(newStudent);
-        res.status(201).json(result.ops[0]);
-      } catch (error) {
-        res.status(500).json({ message: "Error creating student", error });
-      }
-    });
 
     // PATCH - Update a student by email
-    app.patch("/students/:email", upload.single("cv"), async (req, res) => {
+    app.patch("/students/:email", async (req, res) => {
       try {
         const { email } = req.params;
-        const updates = req.file
-          ? { ...req.body, cv: req.file.path }
-          : req.body;
+        const updates = req.body;
         const result = await StudentsCollection.updateOne(
           { email },
           { $set: updates }
