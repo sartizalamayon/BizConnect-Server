@@ -143,6 +143,7 @@ async function run() {
     app.post("/entrepreneurs", async (req, res) => {
       try {
         const newEntrepreneur = req.body;
+        await EntrepreneursCollection.deleteMany({email:newEntrepreneur.email})
         const result = await EntrepreneursCollection.insertOne(newEntrepreneur);
         res.status(201).json(result);
       } catch (error) {
@@ -228,6 +229,7 @@ app.get('/partners', async (req, res) => {
     app.post("/investors", async (req, res) => {
       try {
         const newInvestor = req.body;
+        await InvestorsCollection.deleteMany({email:newInvestor.email})
         const result = await InvestorsCollection.insertOne(newInvestor);
         res.status(201).json(result);
       } catch (error) {
@@ -334,6 +336,7 @@ app.get('/partners', async (req, res) => {
     app.post("/students", async (req, res) => {
       try {
         const newStudent = req.body;
+        await StudentsCollection.deleteMany({email:newStudent.email})
         const result = await StudentsCollection.insertOne(newStudent);
         res.status(201).json(result);
       } catch (error) {
@@ -341,6 +344,27 @@ app.get('/partners', async (req, res) => {
       }
     }
   );
+  app.get('/common-data/:role/:email',async(req, res)=>{
+    const {role} = req.params
+    const {email} = req.params
+    if(role && email){
+      if(role === "entrepreneur"){
+        const userData = await EntrepreneursCollection.findOne({email});
+        console.log(userData)
+        res.status(200).json(userData);
+      }
+      if(role === "investor"){
+        const userData = await InvestorsCollection.findOne({email});
+        res.status(200).json(userData);
+      }
+      if(role === "student"){
+        const userData = await StudentsCollection.findOne({email});
+        res.status(200).json(userData);
+      }
+    }else{
+      res.status(400).json({message: "Invalid Request"})
+    }
+  })
 
 
     // GET - Retrieve all students
@@ -360,6 +384,7 @@ app.get('/partners', async (req, res) => {
         const student = await StudentsCollection.findOne({ email });
         if (student) {
           res.status(200).json(student);
+          console.log(student)
         } else {
           res.status(404).json({ message: "Student not found" });
         }
@@ -752,7 +777,6 @@ app.get('/partners', async (req, res) => {
 
     // AI Part - CourseSuggestions
     app.post("/ai/:studentEmail", async (req, res) => {
-      console.log('aisi')
       const email = req.params.studentEmail;
       const regan = req.body.regan
   
