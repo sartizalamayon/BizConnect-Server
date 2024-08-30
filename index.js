@@ -3,7 +3,7 @@ const cors = require("cors");
 // const multer = require("multer");
 // const path = require("path");
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const genAI = new GoogleGenerativeAI(process.env.API_KEY);
@@ -48,6 +48,11 @@ async function run() {
     // Users Collection
     //
     const UsersCollection = client.db("BizConnect").collection("users");
+    app.get('/users', async(req, res) => {
+      const users = await UsersCollection.find({}).toArray();
+      res.status(200).json(users);
+    })
+
     app.post("/users", async (req, res) => {
       try {
         const newUser = req.body;
@@ -78,6 +83,7 @@ async function run() {
       }
     }
     );
+    
 
 
     //new:::check
@@ -85,34 +91,51 @@ async function run() {
       const { email } = req.params;
       try {
         const user = await UsersCollection.find({email}).toArray();
-        res.status(200).json(user.role);
+        res.status(200).send(user[0].role);
       } catch (error) {
         res.status(500).json({ message: "Error retrieving role", error });
       }
     });
 
+    app.get('/user/:email', async (req, res) => {
+      const email = req.params.email;
+      const user = await UsersCollection.findOne({ email: email });
+      res.json(user);
+  });
+
     //new:::check
     app.get("/data/:role/:email", async(req, res)=>{
       const {role} = req.params
       const {email} = req.params
-      try{
+      console.log(role, email)
+      if(role && email){
         if(role === "entrepreneur"){
-          const userData = await EntrepreneursCollection.findOne({email}).toArray();
+          const userData = await EntrepreneursCollection.findOne({email});
+          console.log(userData)
           res.status(200).json(userData);
         }
         if(role === "investor"){
-          const userData = await InvestorsCollection.findOne({email}).toArray();
+          const userData = await InvestorsCollection.findOne({email});
           res.status(200).json(userData);
         }
         if(role === "student"){
-          const userData = await StudentsCollection.findOne({email}).toArray();
+          const userData = await StudentsCollection.findOne({email});
           res.status(200).json(userData);
         }
-
-      }catch (error) {
-        res.status(500).json({ message: "Error retrieving role", error });
+      }else{
+        res.status(400).json({message: "Invalid Request"})
       }
     })
+
+
+
+    //
+    // Notification Collection
+    //
+    // from, to, date, type,
+    const NotificationCollection = client.db("BizConnect").collection("notifications");
+
+
     //
     // Entrepreneurs Collection
     //
@@ -128,11 +151,74 @@ async function run() {
     }
     );
 
+    app.get("/entrepreneurs/:email", async (req, res) => {
+      try {
+        const { email } = req.params;
+        const entrepreneur = await EntrepreneursCollection.findOne({ email });
+        if (entrepreneur) {
+          res.status(200).json(entrepreneur);
+        } else {
+          res.status(404).json({ message: "Student not found" });
+        }
+      } catch (error) {
+        res.status(500).json({ message: "Error retrieving student", error });
+      }
+    });
+
 
     //
     // Entrepreneurstartups Collection
     //
     const EntrepreneurStartupsCollection = client.db("BizConnect").collection("entrepreneurstartups");
+
+    app.get('/entrepreneurs', async(req, res)=>{
+      const entrepreneurs = await EntrepreneursCollection.find({open_for_partnership:true}).toArray()
+      res.status(200).json(entrepreneurs)
+    })
+
+    app.get('/entrepreneur-startups/funding', async(req, res)=>{
+      const startups = await EntrepreneurStartupsCollection.find({open_for_fund_raising:true}).toArray()
+      res.status(200).json(startups)
+    })
+
+    // In your Express app
+
+app.get('/partners', async (req, res) => {
+  try {
+    const users = await UsersCollection.find({}).toArray();
+    const entrepreneurs = await EntrepreneursCollection.find({ open_for_partnership: true }).toArray();
+
+    // Create a map of user details by email
+    const userDetails = users.reduce((acc, user) => {
+      acc[user.email] = user;
+      return acc;
+    }, {});
+
+    // Merge user details with entrepreneurs data
+    const partners = entrepreneurs.map(entrepreneur => ({
+      ...entrepreneur,
+      ...userDetails[entrepreneur.email],
+    }));
+
+    res.status(200).json(partners);
+  } catch (error) {
+    console.error('Error fetching partners:', error);
+    res.status(500).json({ error: 'Failed to fetch partners' });
+  }
+});
+
+
+    app.get('/startups/:email', async(req, res)=>{
+      const {email} = req.params;
+      const startups = await EntrepreneurStartupsCollection.find({email:email}).toArray()
+      res.status(200).json(startups)
+    })
+
+    app.post('/startup/new', async(req, res)=>{
+      const startup = req.body;
+      const result = await EntrepreneurStartupsCollection.insertOne(startup);
+      res.status(201).json(result)
+    })
 
 
     //
@@ -149,6 +235,94 @@ async function run() {
       }
     }
     );
+    app.get('/investors', async (req, res) => {
+      try {
+        const users = await UsersCollection.find({}).toArray();
+        const investors = await InvestorsCollection.find({ open_for_investments: true }).toArray();
+    
+        // Create a map of user details by email
+        const userDetails = users.reduce((acc, user) => {
+          acc[user.email] = user;
+          return acc;
+        }, {});
+    
+        // Merge user details with investors data
+        const detailedInvestors = investors.map(investor => ({
+          ...investor,
+          ...userDetails[investor.email],
+        }));
+    
+        res.status(200).json(detailedInvestors);
+      } catch (error) {
+        console.error('Error fetching investors:', error);
+        res.status(500).json({ error: 'Failed to fetch investors' });
+      }
+    });
+
+    app.get('/mentors', async (req, res) => {
+      try {
+        const users = await UsersCollection.find({}).toArray();
+        const mentors = await InvestorsCollection.find({ open_for_mentorship: true }).toArray();
+    
+        // Create a map of user details by email
+        const userDetails = users.reduce((acc, user) => {
+          acc[user.email] = user;
+          return acc;
+        }, {});
+    
+        // Merge user details with mentors data
+        const detailedMentors = mentors.map(mentor => ({
+          ...mentor,
+          ...userDetails[mentor.email],
+        }));
+    
+        res.status(200).json(detailedMentors);
+      } catch (error) {
+        console.error('Error fetching mentors:', error);
+        res.status(500).json({ error: 'Failed to fetch mentors' });
+      }
+    });
+    
+    
+
+    app.get("/investors/:email", async (req, res) => {
+      try {
+        const { email } = req.params;
+        const investor = await InvestorsCollection.findOne({ email });
+        if (investor) {
+          res.status(200).json(investor);
+        } else {
+          res.status(404).json({ message: "Investor not found" });
+        }
+      } catch (error) {
+        res.status(500).json({ message: "Error retrieving investor", error });
+      }
+    });
+
+    app.get('/students', async (req, res) => {
+      try {
+        const users = await UsersCollection.find({}).toArray();
+        const students = await StudentsCollection.find({ open_for_employment: true }).toArray();
+    
+        // Create a map of user details by email
+        const userDetails = users.reduce((acc, user) => {
+          acc[user.email] = user;
+          return acc;
+        }, {});
+    
+        // Merge user details with students data
+        const detailedStudents = students.map(student => ({
+          ...student,
+          ...userDetails[student.email],
+        }));
+    
+        res.status(200).json(detailedStudents);
+      } catch (error) {
+        console.error('Error fetching students:', error);
+        res.status(500).json({ error: 'Failed to fetch students' });
+      }
+    });
+    
 
 
     //
@@ -451,6 +625,7 @@ async function run() {
       .db("BizConnect")
       .collection("jobpostings");
     // Schema
+    // _id
     // email (text)
     // job_title (text)
     // job_description (text)
@@ -458,18 +633,46 @@ async function run() {
     // company_name (text)
     // skills (array)
     // deadline (date)
-
-    // GET - Retrieve all job postings
-    app.get("/jobpostings", async (req, res) => {
-      try {
-        const jobPostings = await JobPostingsCollection.find({}).toArray();
-        res.status(200).json(jobPostings);
-      } catch (error) {
-        res
-          .status(500)
-          .json({ message: "Error retrieving job postings", error });
+    app.get('/jobs/:email', async (req, res) => {
+      const { email } = req.params;
+      const jobs = await JobPostingsCollection.find({ email: email }).toArray();
+      console.log(jobs)
+      res.status(200).json(jobs);
+    });
+    
+    app.post('/job/new/:email', async (req, res) => {
+      console.log('sd')
+      const job = req.body;
+      const { email } = req.params;
+      if (result){
+        const data = {
+          email: email,
+          ...job
+        }
+        const rest = await JobPostingsCollection.insertOne(data);
+        res.status(201).json(rest);
       }
     });
+
+    app.delete('/jobs/:id', async (req, res) => {
+      const { id } = req.params;
+      try {
+        const result = await JobPostingsCollection.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 1) {
+          res.status(200).json({ message: 'Job deleted successfully' });
+        } else {
+          res.status(404).json({ error: 'Job not found' });
+        }
+      } catch (error) {
+        console.error('Error deleting job:', error);
+        res.status(500).json({ error: 'Failed to delete job' });
+      }
+    });
+    
+    app.get('/jobs', async(req, res)=>{
+      const jobs = await JobPostingsCollection.find({}).toArray();
+      res.status(200).json(jobs)
+    })
 
     // GET - Retrieve job postings by student email
     app.get("/jobpostings/:email", async (req, res) => {
@@ -549,7 +752,9 @@ async function run() {
 
     // AI Part - CourseSuggestions
     app.post("/ai/:studentEmail", async (req, res) => {
+      console.log('aisi')
       const email = req.params.studentEmail;
+      const regan = req.body.regan
   
       try {
           const studentData = await StudentsCollection.findOne({ email });
@@ -557,10 +762,16 @@ async function run() {
           if (!studentData) {
               return res.status(404).json({ message: "Student not found" });
           }
+
+          const suggestion = await CourseSuggestionsCollection.findOne({email, date:-1})
+          if(suggestion && !regan){
+            
+            res.status(200).send(suggestion)
+            return
+          }
   
           const {
               skills,
-              introduction,
               major,
               graduation_year,
               interested_fields,
@@ -568,34 +779,36 @@ async function run() {
               highest_education_degree
           } = studentData;
   
-          const suggestedSkills_prompt = `Based on the student's skills: ${skills.join(', ')}, major: ${major}, graduation year: ${graduation_year}, and interested fields: ${interested_fields.join(', ')}, suggest new skills the student should learn. Provide the suggestions as an array.`;
-          const skillsRoadmap_prompt = `Based on the student's skills: ${skills.join(', ')}, major: ${major}, graduation year: ${graduation_year}, and interested fields: ${interested_fields.join(', ')}, provide a roadmap for acquiring these skills. Provide the roadmap as a text.`;
-          const suggestedCourses_prompt = `Based on the student's skills: ${skills.join(', ')}, major: ${major}, graduation year: ${graduation_year}, and interested fields: ${interested_fields.join(', ')}, suggest courses the student should take. Provide the suggestions as an array.`;
-          const careerPath_prompt = `Based on the student's skills: ${skills.join(', ')}, major: ${major}, graduation year: ${graduation_year}, and interested fields: ${interested_fields.join(', ')}, suggest a suitable career path. Provide the suggestion as a text.`;
-          const careerRoadmap_prompt = `Based on the student's skills: ${skills.join(', ')}, major: ${major}, graduation year: ${graduation_year}, and interested fields: ${interested_fields.join(', ')}, provide a roadmap for the student's career. Provide the roadmap as a text.`;
-  
+          const suggestedSkills_prompt = `Given the student's current skills: ${skills.join(', ')}, major in ${major}, expected graduation year of ${graduation_year}, and interests in ${interested_fields.join(', ')}, recommend specific 4 new skills the student should acquire. Respond with skills separed by comma. For example, your response could look like this: 'React:Given you know JS, react might be an excellent choice, NodeJs:you need somthing to build backends with as well'`;
+          const skillsRoadmap_prompt = `Considering the student's current skills: ${skills.join(', ')}, and their major in ${major}, suggest a step-by-step roadmap for skill development in their field. Provide the response as plain text. Make it very concise. Only a few lines`;
+          const suggestedCourses_prompt = `Based on the student's skills: ${skills.join(', ')}, major in ${major}, and interests in ${interested_fields.join(', ')}, recommend courses that would enhance their expertise. Respond with 4 course sugeestions separated by comma.  For example, your response could look like this: 'React & Vue.js(Udemy), Introduction to ML(coursera)'`;
+          const careerPath_prompt = `Given the student's skills: ${skills.join(', ')}, major in ${major}, and interests in ${interested_fields.join(', ')}, Provide the response as plain text. Make it very concise. Only a few lines.`;
+          const careerRoadmap_prompt = `Provide a career roadmap considering the student's current skills: ${skills.join(', ')}, major in ${major}, and expected graduation year of ${graduation_year}. Provide the response as plain text. Make it very concise. Only a few lines`;
+          
           const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+          
   
           const suggestedSkillsResult = await model.generateContent(suggestedSkills_prompt);
-          const suggestedSkillsResponse = await suggestedSkillsResult.response;
-          const suggestedSkills = suggestedSkillsResponse.candidates[0].content.parts[0].text;
-  
+          const suggestedSkills = suggestedSkillsResult.response.candidates[0].content.parts[0].text;
+          
+
           const skillsRoadmapResult = await model.generateContent(skillsRoadmap_prompt);
-          const skillsRoadmapResponse = await skillsRoadmapResult.response;
-          const skillsRoadmap = skillsRoadmapResponse.candidates[0].content.parts[0].text;
-  
+          const skillsRoadmap = skillsRoadmapResult.response.candidates[0].content.parts[0].text;
+          
+
           const suggestedCoursesResult = await model.generateContent(suggestedCourses_prompt);
-          const suggestedCoursesResponse = await suggestedCoursesResult.response;
-          const suggestedCourses = suggestedCoursesResponse.candidates[0].content.parts[0].text;
+          const suggestedCourses = suggestedCoursesResult.response.candidates[0].content.parts[0].text;
+          
   
           const careerPathResult = await model.generateContent(careerPath_prompt);
-          const careerPathResponse = await careerPathResult.response;
-          const careerPath = careerPathResponse.candidates[0].content.parts[0].text;
-  
+          const careerPath = careerPathResult.response.candidates[0].content.parts[0].text;
+
+
           const careerRoadmapResult = await model.generateContent(careerRoadmap_prompt);
-          const careerRoadmapResponse = await careerRoadmapResult.response;
-          const careerRoadmap = careerRoadmapResponse.candidates[0].content.parts[0].text;
-  
+          const careerRoadmap = careerRoadmapResult.response.candidates[0].content.parts[0].text;
+
+
+
           const data_to_push = {
               email,
               suggestedSkills,
@@ -604,9 +817,16 @@ async function run() {
               careerPath,
               careerRoadmap,
           };
+
+ 
+
+          // delete all the previous data assosiated with this email in the CourseSuggestionsCollection
+          // {email:email}
+
+          await CourseSuggestionsCollection.deleteMany({email:email})
   
           await CourseSuggestionsCollection.insertOne(data_to_push);
-  
+
           res.status(201).json(data_to_push);
   
       } catch (error) {
@@ -614,24 +834,7 @@ async function run() {
           res.status(500).json({ message: "Error generating AI content", error });
       }
   });
-// GET - Retrieve course suggestions by student email
-app.get('/coursesuggestions/:email', async (req, res) => {
-  const email = req.params.email;
-
-  try {
-      const courseSuggestions = await CourseSuggestionsCollection.findOne({ email });
-
-      if (!courseSuggestions) {
-          return res.status(404).json({ message: 'Course suggestions not found for this student' });
-      }
-
-      res.status(200).json(courseSuggestions);
-  } catch (error) {
-      console.error("Error retrieving course suggestions:", error);
-      res.status(500).json({ message: 'Error retrieving course suggestions', error });
-  }
-});
-
+  
 
 
   } catch (error) {
